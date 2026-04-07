@@ -7,10 +7,12 @@
  */
 
 #include <map>
+#include <stdexcept>
 #include <string>
 #include "TDirectory.h"
 #include "TFile.h"
 #include "TH1D.h"
+#include "TTree.h"
 #include "Geant4/G4LossTableManager.hh"
 #include "Geant4/G4ParticleTable.hh"
 #include "Geant4/G4ParticleDefinition.hh"
@@ -120,9 +122,12 @@ void Geant4WeightCalc::Configure(fhicl::ParameterSet const& p,
 
   // Configure G4Reweighter
   bool totalonly = false;
-  if (fPdg==2212) totalonly = true;
+  if (fPdg == 2212 || fPdg == 2112 || TMath::Abs(fPdg) == 321) totalonly = true;
   ParMaker = new G4ReweightParameterMaker( FitParSets, totalonly );
   theReweighter = RWFactory.BuildReweighter(fPdg, &XSecFile, &FracsFile, ParMaker->GetFSHists(), ParMaker->GetElasticHist() );
+  if (!theReweighter) {
+    throw std::runtime_error("Geant4WeightCalc could not build a reweighter for PDG " + std::to_string(fPdg));
+  }
 
   // Make output trees to save things for quick and easy validation
   art::ServiceHandle<art::TFileService> tfs;
@@ -287,12 +292,15 @@ Geant4WeightCalc::GetWeight(art::Event& e) {
       int mcpID = p.TrackId();
       std::string EndProcess  = p.EndProcess();
 
-      double mass = 0.;
-      if( TMath::Abs(p_PDG) == 211 ) mass = 139.57;
-      else if( p_PDG == 2212 ) mass = 938.28;
-
       // We only want to record weights for one type of particle (defined by fPDG from the fcl file), so skip other particles
       if (p_PDG == fPdg){
+        const G4ParticleDefinition * particle_def =
+            G4ParticleTable::GetParticleTable()->FindParticle(p_PDG);
+        if (!particle_def) {
+          throw std::runtime_error("Geant4WeightCalc could not find a Geant4 particle definition for PDG " + std::to_string(p_PDG));
+        }
+        double mass = particle_def->GetPDGMass() / CLHEP::MeV;
+
         // Get GEANT trajectory points: weighting will depend on position and momentum at each trajectory point so calculate those
         std::vector<double> trajpoint_X;
         std::vector<double> trajpoint_Y;

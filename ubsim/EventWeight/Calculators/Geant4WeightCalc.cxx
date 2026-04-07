@@ -14,8 +14,6 @@
 #include "TH1D.h"
 #include "TTree.h"
 #include "Geant4/G4LossTableManager.hh"
-#include "Geant4/G4ParticleTable.hh"
-#include "Geant4/G4ParticleDefinition.hh"
 #include "Geant4/G4Material.hh"
 #include "Geant4/G4MaterialCutsCouple.hh"
 #include "art/Framework/Services/Optional/TFileService.h"
@@ -294,12 +292,14 @@ Geant4WeightCalc::GetWeight(art::Event& e) {
 
       // We only want to record weights for one type of particle (defined by fPDG from the fcl file), so skip other particles
       if (p_PDG == fPdg){
-        const G4ParticleDefinition * particle_def =
-            G4ParticleTable::GetParticleTable()->FindParticle(p_PDG);
-        if (!particle_def) {
-          throw std::runtime_error("Geant4WeightCalc could not find a Geant4 particle definition for PDG " + std::to_string(p_PDG));
+        double mass = 0.;
+        if (TMath::Abs(p_PDG) == 211) mass = 139.57;
+        else if (TMath::Abs(p_PDG) == 321) mass = 493.677;
+        else if (p_PDG == 2212) mass = 938.272;
+        else if (p_PDG == 2112) mass = 939.565;
+        else {
+          throw std::runtime_error("Geant4WeightCalc does not know the particle mass for PDG " + std::to_string(p_PDG));
         }
-        double mass = particle_def->GetPDGMass() / CLHEP::MeV;
 
         // Get GEANT trajectory points: weighting will depend on position and momentum at each trajectory point so calculate those
         std::vector<double> trajpoint_X;
